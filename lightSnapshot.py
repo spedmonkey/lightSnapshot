@@ -1,6 +1,5 @@
 __author__ = 'spedmonkey'
 '''
-#
 import method
 
 import sys
