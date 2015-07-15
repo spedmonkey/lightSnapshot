@@ -1,4 +1,3 @@
-__author__ = 'spedmonkey'
 '''
 import method
 
@@ -14,31 +13,28 @@ import maya.cmds as cmds
 import maya.OpenMayaUI as mui
 from PyQt4 import QtCore, QtGui
 import sip
-import pymel.core as pm
+import pymel.core as pm 
 import json
 import datetime
 
-lightDic = {}
-myTime=datetime.datetime.now()
-mayaScene=cmds.file(q=True, sn=1, shortName=True)
-lightSnapshot=[]
-
-def getMayaWindow():
+def getMayaWindow():                        
     ptr=mui.MQtUtil.mainWindow()
     return sip.wrapinstance(long(ptr), QtCore.QObject)
 
 class BasicDialog(QtGui.QDialog):
-    #def global variables
-    #lightSnapshot=[]
     #Start GUI
     def __init__(self, parent=getMayaWindow()):
         super(BasicDialog, self).__init__(parent)
+
+        self.sceneDirectory=(cmds.file(q=1, sn=1)).rsplit('/', 1)[0]
+        self.mayaScene=(cmds.file(q=1, sn=1)).rsplit('/', 1)[-1]
+        
         self.setWindowTitle("lightSnapshot")
         self.shapeTypeCB=QtGui.QComboBox(parent=self)
-        self.populateCB()
-
+        #self.populateCB()
+       
         #createWidgets
-        self.timelbl=QtGui.QLabel("description", parent=self)
+        self.timelbl=QtGui.QLabel("description", parent=self)                 
         self.scenelbl=QtGui.QLabel("scene", parent=self)
         self.loadBtn=QtGui.QPushButton("Load")
         self.saveBtn=QtGui.QPushButton("Save")
@@ -49,107 +45,155 @@ class BasicDialog(QtGui.QDialog):
 
         actionLayout.addWidget(self.timelbl)
         actionLayout.addWidget(self.scenelbl)
-        actionLayout.addWidget(self.loadBtn)
+        actionLayout.addWidget(self.loadBtn)          
         actionLayout.addWidget(self.saveBtn)
-
+        
+        self.populateCB()
+        self.changeLabels()
+          
         #Connecting Signals
-        self.connect(self.shapeTypeCB, QtCore.SIGNAL("currentIndexChanged(int)"), self.changeLabels)
+        self.connect(self.shapeTypeCB, QtCore.SIGNAL("currentIndexChanged(int)"), self.changeLabels)           
         self.connect(self.saveBtn, QtCore.SIGNAL("clicked()"), self.saveButton)
         self.connect(self.loadBtn, QtCore.SIGNAL("clicked()"), self.loadAttr)
 
     def populateCB(self):
+        for i in self.readData():
+                self.shapeTypeCB.addItem (i[0] [i[0].keys()[0]]['snapShotDescription']) 
+        print "=========================================================="
+        print "==========================LOADING========================="
+        print "=========================================================="
+         
+    def changeLabels(self): 
         try:
-            for i in self.readData():
-                print i[str(myLights[0])][6][1]
-                self.shapeTypeCB.addItem(i[str(myLights[0])][6][1])
+            version = self.shapeTypeCB.currentIndex()
+            firstLight=self.readData()[version][0].keys()[0]
+            self.scenelbl.setText (self.readData()[version][0][firstLight]['snapShotScene'])
+            self.timelbl.setText (self.readData()[version][0][firstLight]['snapShottime']) 
         except:
-            print 'failed to read file'
-
-    def changeLabels(self):
-        self.timelbl.setText (self.readData()[self.shapeTypeCB.currentIndex()][str(myLights[0])][3][1] )
-        self.scenelbl.setText (self.readData()[self.shapeTypeCB.currentIndex()][str(myLights[0])][6][1] )
+            print 'failed to change labels'       
 
     def readData(self):
         try:
-            with open ("/usr/home/crussell/Documents/python/lightSnapshot/test.json") as data_file:
+            with open (self.sceneDirectory+"/lightSnapshot.json") as data_file:
                 lightSnapshot=json.load(data_file)
-                print 'data read'
         except:
-            lightSnapshot = "couldn't open file"
-        return lightSnapshot
-
-
+            lightSnapshot = []       
+        return  lightSnapshot
+    
     def loadAttr(self):
         lightSnapshot=self.readData()
-        try:
-                #NEED TO CHANGE [-1] TO INDEX OF COMBO BOX
-            for i in self.readData()[self.shapeTypeCB.currentIndex()]:
-                print i
+        version = self.shapeTypeCB.currentIndex()
+        
+        #index is the index of the combo box
+        myDic=lightSnapshot[version][0]
+        
+        #setShape Values
+        for key, value in myDic.items():
+            for extrakey, extravalue in value.items(): 
+                try:
+                    if isinstance (extravalue, basestring) == True:
+                        if extravalue == 'None':
+                            extravalue = ''
+                            exec ("pm.PyNode('{0}').{1}.set('{2}')".format (key, extrakey, extravalue))
+                            print ("pm.PyNode('{0}').{1}.set('{2}')".format (key, extrakey, extravalue)) + " VALUE SET"
+                            
+                        else: 
+                            exec ("pm.PyNode('{0}').{1}.set('{2}')".format (key, extrakey, extravalue))
+                            print ("pm.PyNode('{0}').{1}.set('{2}')".format (key, extrakey, extravalue)) + " VALUE SET"                            
+                    else:    
+                        exec ("pm.PyNode('{0}').{1}.set({2})".format (key, extrakey, extravalue))
+                        print ("pm.PyNode('{0}').{1}.set({2})".format (key, extrakey, extravalue)) + " VALUE SET"
+                except:
+                    pass
 
-                #CREATE pyNode and variables
-                myLight = pm.PyNode(i)
-                notes=lightSnapshot[self.shapeTypeCB.currentIndex()][i][6][1]
-
-                exposure=lightSnapshot[self.shapeTypeCB.currentIndex()][i][1][1]
-                lightColor=lightSnapshot[self.shapeTypeCB.currentIndex()][i][2][1]
-                snapTime=lightSnapshot[self.shapeTypeCB.currentIndex()][i][3][1]
-
-                #print lightColor
-                translate=lightSnapshot[self.shapeTypeCB.currentIndex()][i][4][1]
-                rotate=lightSnapshot[self.shapeTypeCB.currentIndex()][i][5][1]
-
-                #Set Attr
-                myLight.exposure.set(exposure)
-                myLight.lightColor.set(lightColor)
-
-                myLight.listRelatives(p=1)[0].translate.set(translate)
-                myLight.listRelatives(p=1)[0].rotate.set(rotate)
-
-                if myLight.hasAttr('notes'):
-                    myLight.notes.set(notes)
-                else:
-                    myLight.addAttr('notes', dt='string')
-                    myLight.notes.set(notes)
-        except:
-            for i in self.readData()[0]:
-                print i
-            print 'failed to create pynode'
-            pass
+        #setTransform Values                       
+        for key, value in myDic.items():
+            for extrakey, extravalue in value.items(): 
+                try:
+  
+                    exec ("pm.PyNode('{0}').{1}.set({2})".format (key, extrakey, extravalue) )
+                except:
+                    pass
 
     def saveButton(self):
-        self.textDialog()
-        self.shapeTypeCB.clear()
-        self.writeLightLister()
-        self.populateCB()
-
-    def textDialog(self):
+        if self.textDialog()!='cancelled':
+            self.shapeTypeCB.clear()
+            self.writeLightLister()
+            self.populateCB()
+        else:
+            print "Cancelled Save"
+       
+    def textDialog(self):      
+        myVar=""
         text, ok = QtGui.QInputDialog.getText(self, 'Input Dialog', 'Enter Description:')
         if ok:
-            self.notes=text
-
+            self.description = str(text)
+        else:
+            self.description = 'cancelled'
+        return self.description
+        
     def getLights(self):
+    
         #change to type of lights
-        myLights=pm.ls(type='<type of light>')
+        areaLights=pm.ls(type='wmAreaLightNode')
+        ibl=pm.ls(type='wmImageBasedLightNode')
+        blockers = pm.ls(type='wmGoboNode')
+        myLights=areaLights+ibl+blockers
         return myLights
-
+                 
     def writeLightLister(self):
-        for i in self.getLights():
-            #Define Attributes
-            lightTrans = pm.xform(i.listRelatives(p=1), ws=1, t=1, q=1)
-            lightRot =  pm.xform(i.listRelatives(p=1), ws=1, ro=1, q=1)
-            #lightScale=  pm.xform(i.listRelatives(p=1), ws=1, s=1, q=1)
-            exposure = i.exposure.get()
-            lightColor = i.lightColor.get()
-            lightDic[i.name()] = [ ["name",i.name()], ["exposure", exposure], ["color",lightColor], ["time", str(myTime)], ["translate", lightTrans], ["rotate", lightRot],["notes", str(self.notes)],["scene", mayaScene] ]
-
+        tempList=[]
+        
         try:
-            lightSnapshot=self.readData()
-            lightSnapshot.append(lightDic)
+            lightSnapshot=self.readData()   
         except:
+            print 'failed to read'
             lightSnapshot=[]
-            lightSnapshot.append(lightDic)
+        
+        lightDic={}
 
-        with open("/usr/home/crussell/Documents/python/lightSnapshot/test.json", mode="w") as feedsjson:
-            json.dump(lightSnapshot, feedsjson, indent=4)
-            feedsjson.write('\n')
-        print 'data saved'
+        for i in self.getLights():
+            lightDic[i.name()]={}
+            lightDic[ str(i.listRelatives(p=1)[0]) ]={}
+            
+            mayaScene=self.mayaScene
+            
+            #Define Attributes
+            self.snapShotTime=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            #create dictionary  
+            #create shape dictionary
+            for attribute in i.listAttr():
+                try: 
+                    lightDic[i.name()][attribute.rsplit('.', 1)[1]]=str(attribute.get())
+                except:
+                    pass
+            #Add custom attributes / meta information to shape      
+            lightDic[i.name()]['snapShotDescription']=self.description
+            lightDic[i.name()]['snapShotScene']=self.mayaScene
+            lightDic[i.name()]['snapShottime']=self.snapShotTime  
+            #create transform dictionary
+            for transforms in i.listRelatives(p=1)[0].listAttr():
+                try:
+                    lightDic[ str(i.listRelatives(p=1)[0])] [str(transforms.rsplit('.', 1)[1])]=str(transforms.get())
+                except:
+                    pass
+            #Add custom attributes / meta information to transform
+            lightDic[ str(i.listRelatives(p=1)[0])]['snapShotDescription']=self.description
+            lightDic[ str(i.listRelatives(p=1)[0])]['snapShotScene']=self.mayaScene
+            lightDic[ str(i.listRelatives(p=1)[0])]['snapShottime']=self.snapShotTime
+            
+            #append ditionary to list
+            tempList.append(lightDic)
+            
+        lightSnapshot=[tempList]+lightSnapshot
+        
+        with open(self.sceneDirectory+"/lightSnapshot.json", mode="w") as feedsjson:
+            json.dump(lightSnapshot, feedsjson, indent=4) 
+            feedsjson.write('\n') 
+
+        print "=========================================================="
+        print "==========================SAVING=========================="
+        for i in self.getLights():
+            print 'Saving '+i
+        print "=========================================================="
